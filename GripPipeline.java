@@ -1,3 +1,5 @@
+package redvision;
+
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -26,8 +28,11 @@ import org.opencv.objdetect.*;
 public class GripPipeline implements VisionPipeline {
 
 	//Outputs
-	private Mat blurOutput = new Mat();
-	private Mat rgbThresholdOutput = new Mat();
+	private Mat blur0Output = new Mat();
+	private Mat hsvThreshold0Output = new Mat();
+	private Mat hsvThreshold1Output = new Mat();
+	private Mat cvAddOutput = new Mat();
+	private Mat blur1Output = new Mat();
 	private MatOfKeyPoint findBlobsOutput = new MatOfKeyPoint();
 
 	static {
@@ -39,21 +44,39 @@ public class GripPipeline implements VisionPipeline {
 	 */
 	@Override	public void process(Mat source0) {
 		// Step Blur0:
-		Mat blurInput = source0;
-		BlurType blurType = BlurType.get("Gaussian Blur");
-		double blurRadius = 6.306306306306306;
-		blur(blurInput, blurType, blurRadius, blurOutput);
+		Mat blur0Input = source0;
+		BlurType blur0Type = BlurType.get("Median Filter");
+		double blur0Radius = 10.81081081081081;
+		blur(blur0Input, blur0Type, blur0Radius, blur0Output);
 
-		// Step RGB_Threshold0:
-		Mat rgbThresholdInput = blurOutput;
-		double[] rgbThresholdRed = {45.86330935251798, 255.0};
-		double[] rgbThresholdGreen = {0.0, 87.57575757575756};
-		double[] rgbThresholdBlue = {11.465827338129495, 188.749094803773};
-		rgbThreshold(rgbThresholdInput, rgbThresholdRed, rgbThresholdGreen, rgbThresholdBlue, rgbThresholdOutput);
+		// Step HSV_Threshold0:
+		Mat hsvThreshold0Input = blur0Output;
+		double[] hsvThreshold0Hue = {0.0, 45.151515151515156};
+		double[] hsvThreshold0Saturation = {102.08045254599789, 250.54477199952598};
+		double[] hsvThreshold0Value = {119.24460431654676, 255.0};
+		hsvThreshold(hsvThreshold0Input, hsvThreshold0Hue, hsvThreshold0Saturation, hsvThreshold0Value, hsvThreshold0Output);
+
+		// Step HSV_Threshold1:
+		Mat hsvThreshold1Input = blur0Output;
+		double[] hsvThreshold1Hue = {106.83453237410072, 180.0};
+		double[] hsvThreshold1Saturation = {68.79496402877697, 255.0};
+		double[] hsvThreshold1Value = {110.07194244604317, 255.0};
+		hsvThreshold(hsvThreshold1Input, hsvThreshold1Hue, hsvThreshold1Saturation, hsvThreshold1Value, hsvThreshold1Output);
+
+		// Step CV_add0:
+		Mat cvAddSrc1 = hsvThreshold0Output;
+		Mat cvAddSrc2 = hsvThreshold1Output;
+		cvAdd(cvAddSrc1, cvAddSrc2, cvAddOutput);
+
+		// Step Blur1:
+		Mat blur1Input = cvAddOutput;
+		BlurType blur1Type = BlurType.get("Median Filter");
+		double blur1Radius = 13.513513513513514;
+		blur(blur1Input, blur1Type, blur1Radius, blur1Output);
 
 		// Step Find_Blobs0:
-		Mat findBlobsInput = rgbThresholdOutput;
-		double findBlobsMinArea = 1.0;
+		Mat findBlobsInput = blur1Output;
+		double findBlobsMinArea = 14.0;
 		double[] findBlobsCircularity = {0.0, 1.0};
 		boolean findBlobsDarkBlobs = false;
 		findBlobs(findBlobsInput, findBlobsMinArea, findBlobsCircularity, findBlobsDarkBlobs, findBlobsOutput);
@@ -64,16 +87,40 @@ public class GripPipeline implements VisionPipeline {
 	 * This method is a generated getter for the output of a Blur.
 	 * @return Mat output from Blur.
 	 */
-	public Mat blurOutput() {
-		return blurOutput;
+	public Mat blur0Output() {
+		return blur0Output;
 	}
 
 	/**
-	 * This method is a generated getter for the output of a RGB_Threshold.
-	 * @return Mat output from RGB_Threshold.
+	 * This method is a generated getter for the output of a HSV_Threshold.
+	 * @return Mat output from HSV_Threshold.
 	 */
-	public Mat rgbThresholdOutput() {
-		return rgbThresholdOutput;
+	public Mat hsvThreshold0Output() {
+		return hsvThreshold0Output;
+	}
+
+	/**
+	 * This method is a generated getter for the output of a HSV_Threshold.
+	 * @return Mat output from HSV_Threshold.
+	 */
+	public Mat hsvThreshold1Output() {
+		return hsvThreshold1Output;
+	}
+
+	/**
+	 * This method is a generated getter for the output of a CV_add.
+	 * @return Mat output from CV_add.
+	 */
+	public Mat cvAddOutput() {
+		return cvAddOutput;
+	}
+
+	/**
+	 * This method is a generated getter for the output of a Blur.
+	 * @return Mat output from Blur.
+	 */
+	public Mat blur1Output() {
+		return blur1Output;
 	}
 
 	/**
@@ -84,6 +131,32 @@ public class GripPipeline implements VisionPipeline {
 		return findBlobsOutput;
 	}
 
+
+	/**
+	 * Segment an image based on hue, saturation, and value ranges.
+	 *
+	 * @param input The image on which to perform the HSL threshold.
+	 * @param hue The min and max hue
+	 * @param sat The min and max saturation
+	 * @param val The min and max value
+	 * @param output The image in which to store the output.
+	 */
+	private void hsvThreshold(Mat input, double[] hue, double[] sat, double[] val,
+	    Mat out) {
+		Imgproc.cvtColor(input, out, Imgproc.COLOR_BGR2HSV);
+		Core.inRange(out, new Scalar(hue[0], sat[0], val[0]),
+			new Scalar(hue[1], sat[1], val[1]), out);
+	}
+
+	/**
+	 * Calculates the sum of two Mats.
+	 * @param src1 the first Mat
+	 * @param src2 the second Mat
+	 * @param out the Mat that is the sum of the two Mats
+	 */
+	private void cvAdd(Mat src1, Mat src2, Mat out) {
+		Core.add(src1, src2, out);
+	}
 
 	/**
 	 * An indication of which type of filter to use for a blur.
@@ -148,21 +221,6 @@ public class GripPipeline implements VisionPipeline {
 				Imgproc.bilateralFilter(input, output, -1, radius, radius);
 				break;
 		}
-	}
-
-	/**
-	 * Segment an image based on color ranges.
-	 * @param input The image on which to perform the RGB threshold.
-	 * @param red The min and max red.
-	 * @param green The min and max green.
-	 * @param blue The min and max blue.
-	 * @param output The image in which to store the output.
-	 */
-	private void rgbThreshold(Mat input, double[] red, double[] green, double[] blue,
-		Mat out) {
-		Imgproc.cvtColor(input, out, Imgproc.COLOR_BGR2RGB);
-		Core.inRange(out, new Scalar(red[0], green[0], blue[0]),
-			new Scalar(red[1], green[1], blue[1]), out);
 	}
 
 	/**
