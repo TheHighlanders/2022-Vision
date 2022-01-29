@@ -16,6 +16,8 @@ import org.opencv.imgcodecs.Imgcodecs;
 import org.opencv.imgproc.*;
 import org.opencv.objdetect.*;
 
+
+//yeet
 /**
 * GripPipeline class.
 *
@@ -30,6 +32,8 @@ public class GripPipeline implements VisionPipeline {
 	private Mat hsvThresholdOutput = new Mat();
 	private Mat blur1Output = new Mat();
 	private MatOfKeyPoint findBlobsOutput = new MatOfKeyPoint();
+	private CameraServer inst = CameraServer.getInstance();
+	private CVSource imageOut =  inst.putvideo("processed", 160, 120);
 
 	static {
 		System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
@@ -64,6 +68,44 @@ public class GripPipeline implements VisionPipeline {
 		double[] findBlobsCircularity = {0.0, 1.0};
 		boolean findBlobsDarkBlobs = false;
 		findBlobs(findBlobsInput, findBlobsMinArea, findBlobsCircularity, findBlobsDarkBlobs, findBlobsOutput);
+
+		// isolate target pixels and get bounding box 
+		Mat noneZero = new Mat();
+		Core.findNonZero(rgbThresholdOutput, noneZero);
+		Rect boundingBox = Imgproc.boundingRect(noneZero);
+
+		// calculate aiming paramaters
+		double range = -1;
+		double centerX = -1;
+		double centerY = -1;
+		if(boundingBox.width != 0 && boundingBox.height != 0)
+		{
+			//double widthRangeCalc = (215*39)/boundingBox.width;
+			double heightRangeCalc = (255*17)/boundingBox.height;
+			range = heightRangeCalc;
+			centerX = boundingBox.x + (boundingBox.width / 2);
+			centerY = boundingBox.y + (boundingBox.height / 2);
+		}
+
+		//update netwrok tables
+		NetworkTable table = netWorkTable.getTable("Test");
+		NetworkTableEntry centerXEntry = table.getEntry("centerX");
+		NetworkTableEntry centerYEntry = table.getEntry("centerY");
+		NetworkTableEntry rangeEntry = table.getEntry("Range");
+
+		centerXEntry.setDouble(centerX);
+		centerYEntry.setDouble(centerY);
+		rangeEntry.setDouble(range);
+
+		//update output image
+		Mat imageout = blurOutput;
+		Imgproc.rectangle(imageout, 
+						  new Point(boundingBox.x, boundingBox.y),
+						  new Point(boundingBox.x+boundingBox.width, boundingBox.y+boundingBox.height), 
+						  new Scalar(0,0,254),
+						  2);
+		imageOut.putFrame(imageout); 
+	}
 
 	}
 
